@@ -1100,6 +1100,7 @@
       active: "#/terminal/options",
       topSegs: topSegs,
       mainCls: "term-opt" + (state.screen === "play" || state.screen === "done" ? " is-focus" : state.screen === "lab" ? " is-lab" : ""),
+      scrollKey: state.screen + "|" + (state.qn || 0),
       main: main,
       statusHints: hints,
       statusSegs: '<span class="seg">' + esc(state.screen === "lab" ? "LAB" : modeDef(qm()).label) + '</span>',
