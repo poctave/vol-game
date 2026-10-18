@@ -1,5 +1,7 @@
 # Vol Game
 
+**Try it in your browser: https://poctave.github.io/vol-game/**
+
 A typed options-strategy game that runs in the browser. You recognise, price and build option strategies against the clock.
 
 **Strategy modes**
@@ -20,7 +22,7 @@ A typed options-strategy game that runs in the browser. You recognise, price and
 
 ## Run it
 
-It is a static page with no build step and no dependencies: open `index.html` in a browser, or serve the folder (`python3 -m http.server`). Progress is kept in `localStorage`.
+Online: https://poctave.github.io/vol-game/. Locally: it is a static page with no build step and no dependencies, so open `index.html` in a browser, or serve the folder (`python3 -m http.server`). Progress is kept in `localStorage`.
 
 ## Tests
 
