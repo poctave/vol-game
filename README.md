@@ -22,6 +22,7 @@ A typed options-strategy game that runs in the browser. You recognise, price and
 - Mixed runs, a 5 / 10 / 20-question format or survival.
 - Difficulty tiers, and filters per strategy and per Greek.
 - Points, ranks and a mastery board.
+- **Skip** any question for 0 points, or take one **hint** for half points: four choices on naming and number questions, the leg types when building, key levels when drawing.
 
 ## Run it
 

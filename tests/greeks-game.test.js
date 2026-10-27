@@ -147,4 +147,25 @@
       expect(/^e:/.test(env.mid)).toBe(true);
     });
   });
+
+  describe("greeksGame · hints", function () {
+    var prefs = { gExcluded: [], gPuts: true, gShorts: true, envExcluded: [] };
+    ["gname", "gtenor", "envelope"].forEach(function (mode) {
+      it("four distinct choices, the answer among them, the rest wrong · " + mode, function () {
+        var deck = GG.makeDeck(mode, prefs);
+        for (var i = 0; i < 40; i++) {
+          var qq = deck.next(), cs = GG.hintChoices(mode, qq);
+          expect(cs.length).toBe(4);
+          var labels = cs.map(function (c) { return c.label; });
+          expect(labels.filter(function (l, j) { return labels.indexOf(l) === j; }).length).toBe(4);
+          var grade = function (v) {
+            return mode === "gname" ? GG.gradeName(qq, v).grade : mode === "gtenor" ? GG.gradeTenor(qq, v).grade : GG.gradeEnvelope(qq, v).grade;
+          };
+          var full = cs.filter(function (c) { return grade(c.value) === "full"; });
+          var wrong = cs.filter(function (c) { return grade(c.value) === "wrong"; });
+          if (full.length !== 1 || wrong.length !== 3) throw new Error(mode + ": " + labels.join(", "));
+        }
+      });
+    });
+  });
 })();

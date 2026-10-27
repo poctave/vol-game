@@ -236,6 +236,40 @@
     return { grade: grade, hits: hits, n: n, off: off };
   }
 
+  // ---------- hints ----------
+  // A hint caps the answer at half points (the view downgrades a "full" to "partial").
+  // Name modes (payoff, greeks): four choices — the answer plus three strategies that are
+  // NOT also right on the evidence shown (a parity twin would be a second correct answer),
+  // drawn from those closest in leg count and tier so the choice still takes thought.
+  function shuffle(a, rand) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rand() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function hintChoices(mode, q, opts, rand) {
+    rand = rand || Math.random;
+    var me = M().strategy(q.id);
+    var cands = strategies().filter(function (s) {
+      return s.id !== q.id && gradeName(mode, q, s.name, opts).grade === "wrong";
+    }).map(function (s) {
+      return { s: s, d: Math.abs(s.legs.length - me.legs.length) + 0.5 * Math.abs(s.tier - me.tier) + 1.5 * rand() };
+    });
+    cands.sort(function (a, b) { return a.d - b.d; });
+    var out = cands.slice(0, 3).map(function (c) { return { label: c.s.name, value: c.s.name }; });
+    out.push({ label: me.name, value: me.name });
+    return shuffle(out, rand);
+  }
+  // Build mode: what kinds of legs the textbook version uses, not their sides or strikes.
+  function legHint(q) {
+    var n = { C: 0, P: 0, S: 0 };
+    q.pos.forEach(function (l) { n[l.t] += Math.abs(l.q); });
+    var parts = [];
+    if (n.C) parts.push(n.C + " call" + (n.C > 1 ? "s" : ""));
+    if (n.P) parts.push(n.P + " put" + (n.P > 1 ? "s" : ""));
+    if (n.S) parts.push(n.S + " share" + (n.S > 1 ? "s" : "") + " of stock");
+    var fronts = q.pos.some(function (l) { return l.exp === "F"; });
+    return parts.join(" + ") + (fronts ? " · two maturities" : "");
+  }
+
   // ---------- scoring ----------
   // 100 for a clean answer, 50 for partial. A streak of clean answers adds +10 per link,
   // capped at +50.
@@ -355,6 +389,7 @@
     MODES: MODES, FAMILIES: FAMILIES, DRAW_LO: DRAW_LO, DRAW_HI: DRAW_HI,
     norm: norm, resolve: resolve,
     poolFor: poolFor, dealParams: dealParams, makeDeck: makeDeck,
+    hintChoices: hintChoices, legHint: legHint,
     gradeName: gradeName, gradeBuild: gradeBuild, drawSpec: drawSpec, tradeLabel: tradeLabel, gradeDraw: gradeDraw, score: score,
     loadPrefs: loadPrefs, savePrefs: savePrefs, loadRuns: loadRuns, saveRun: saveRun,
     mastery: mastery, bestFor: bestFor, summary: summary, rank: rank,

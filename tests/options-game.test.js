@@ -193,4 +193,33 @@
       expect(p.tiers).toEqual([1, 2]);
     });
   });
+
+  describe("optionsGame · hints", function () {
+    function seq() { var x = 0.37; return function () { x = (x * 9301 + 49297) % 233280 / 233280; return x; }; }
+    ["payoff", "greeks"].forEach(function (mode) {
+      it("four distinct choices, the answer among them, the rest wrong · " + mode, function () {
+        D.strategies.forEach(function (s) {
+          var qq = q(s.id), cs = G.hintChoices(mode, qq, {}, seq());
+          expect(cs.length).toBe(4);
+          var labels = cs.map(function (c) { return c.label; });
+          expect(labels.filter(function (l, i) { return labels.indexOf(l) === i; }).length).toBe(4);
+          var right = cs.filter(function (c) { return G.gradeName(mode, qq, c.value, {}).grade === "full"; });
+          if (right.length !== 1 || right[0].label !== s.name) throw new Error(mode + " " + s.id + ": " + labels.join(", "));
+        });
+      });
+    });
+    it("signs-only Greeks: no decoy shares the answer's sign profile", function () {
+      D.strategies.forEach(function (s) {
+        var qq = q(s.id), cs = G.hintChoices("greeks", qq, { signsOnly: true }, seq());
+        var right = cs.filter(function (c) { return G.gradeName("greeks", qq, c.value, { signsOnly: true }).grade === "full"; });
+        if (right.length !== 1) throw new Error(s.id + ": " + cs.map(function (c) { return c.label; }).join(", "));
+      });
+    });
+    it("build hint names the leg types, not the sides or strikes", function () {
+      expect(G.legHint(q("long-straddle"))).toBe("1 call + 1 put");
+      expect(G.legHint(q("covered-call"))).toBe("1 call + 1 share of stock");
+      expect(G.legHint(q("put-ratio"))).toBe("3 puts");
+      expect(/two maturities/.test(G.legHint(q("calendar")))).toBe(true);
+    });
+  });
 })();

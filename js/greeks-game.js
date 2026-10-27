@@ -213,6 +213,36 @@
     return { grade: off <= 0.10 ? "full" : off <= 0.25 ? "partial" : "wrong", value: v, off: off };
   }
 
+  // ---------- hints: four choices (answer + three that grade "wrong"), see optionsGame ----------
+  function shuffle(a, rand) {
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rand() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function hintChoices(mode, q, rand) {
+    rand = rand || Math.random;
+    var out = [];
+    if (mode === "gname") {
+      var me = GM().greek(q.greek);
+      var others = shuffle(GM().GREEKS.filter(function (g) { return gradeName(q, g.name).grade === "wrong"; }), rand)
+        .sort(function (a, b) { return (a.tier === me.tier ? 0 : 1) - (b.tier === me.tier ? 0 : 1); });
+      out = others.slice(0, 3).map(function (g) { return { label: g.sym + "  " + g.name, value: g.name }; });
+      out.push({ label: me.sym + "  " + me.name, value: me.name });
+    } else if (mode === "gtenor") {
+      var t = tenor(q.tenor);
+      out = shuffle(TENORS.filter(function (x) { return gradeTenor(q, x.days + "d").grade === "wrong"; }), rand)
+        .slice(0, 3).map(function (x) { return { label: x.label, value: x.days + "d" }; });
+      out.push({ label: t.label, value: t.days + "d" });
+    } else if (mode === "envelope") {
+      var seen = {};
+      seen[fmtNum(q.exact)] = 1;
+      out = shuffle([0.4, 0.5, 0.62, 1.6, 1.9, 2.4], rand).map(function (f) { return q.exact * f; })
+        .filter(function (v) { var l = fmtNum(v); if (seen[l]) return false; seen[l] = 1; return true; })
+        .slice(0, 3).map(function (v) { return { label: fmtNum(v), value: fmtNum(v) }; });
+      out.push({ label: fmtNum(q.exact), value: fmtNum(q.exact) });
+    }
+    return shuffle(out, rand);
+  }
+
   function fmtNum(v) {
     var a = Math.abs(v);
     return a >= 10 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : a >= 0.01 ? v.toFixed(3) : a === 0 ? "0" : String(+v.toPrecision(3));
@@ -253,6 +283,6 @@
     makeDeck: makeDeck, positionText: positionText,
     gradeName: gradeName, drawSpec: drawSpec, gradeDraw: gradeDraw,
     parseTenor: parseTenor, gradeTenor: gradeTenor, gradeEnvelope: gradeEnvelope,
-    tenorWorking: tenorWorking, envWorking: envWorking, fmtNum: fmtNum, itemName: itemName
+    tenorWorking: tenorWorking, envWorking: envWorking, fmtNum: fmtNum, itemName: itemName, hintChoices: hintChoices
   };
 })();

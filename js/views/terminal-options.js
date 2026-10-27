@@ -410,6 +410,60 @@
     (state.note ? '<div class="opt-note ' + (state.note.cls || "ta") + '">' + esc(state.note.text) + '</div>' : '');
   }
 
+  // ---- skip and hints ----
+  // SKIP: reveal the answer for 0 points (breaks the streak, costs a life in survival).
+  // HINT: once per question, caps a right answer at half points. Typed modes get four
+  // choices; build gets the leg types; draw gets key levels; draw-the-Greek gets its shape.
+  var TYPED_MODES = ["payoff", "greeks", "gname", "gtenor", "envelope"];
+  function hintLabel(mode) {
+    return TYPED_MODES.indexOf(mode) >= 0 ? "HINT · 4 CHOICES" : mode === "build" ? "HINT · LEG TYPES"
+      : mode === "gdraw" ? "HINT · ITS SHAPE" : "HINT · KEY LEVELS";
+  }
+  function assist() {
+    if (state.revealed) return "";
+    var mode = qm();
+    var h = '<div class="play-row opt-assist">' +
+      (state.hinted
+        ? '<span class="td">hint used · a right answer now scores half</span>'
+        : '<button class="play-btn" data-hint="1" title="caps this answer at half points">' + hintLabel(mode) + '</button>') +
+      '<span class="grow"></span>' +
+      '<button class="play-btn" data-skip="1" title="see the answer · 0 pts, breaks the streak' + (isSurvival() ? ", costs a life" : "") + '">SKIP →</button></div>';
+    if (state.hinted && state.choices) {
+      h += '<div class="opt-choices">' + state.choices.map(function (c, i) {
+        return '<button class="play-btn opt-choice" data-choice="' + i + '">' + esc(c.label) + '</button>';
+      }).join("") + '</div>';
+    }
+    if (state.hinted && state.hintHtml) h += '<div class="opt-hint">' + state.hintHtml + '</div>';
+    return h;
+  }
+  function hint() {
+    if (state.revealed || state.hinted) return;
+    var mode = qm(), q = state.q;
+    state.hinted = true;
+    if (mode === "payoff" || mode === "greeks") state.choices = G().hintChoices(mode, q, { signsOnly: state.prefs.signsOnly });
+    else if (TYPED_MODES.indexOf(mode) >= 0) state.choices = GG().hintChoices(mode, q);
+    else if (mode === "build") state.hintHtml = '<span class="td">The textbook version uses</span> <span class="tw">' + esc(G().legHint(q)) + '</span>';
+    else if (mode === "draw") {
+      var sp = state.draw.spec;
+      state.hintHtml = state.prefs.inclPremium ? statsLine(q.pos)
+        : '<span class="td">Payoff at ' + sp.xs[0] + ':</span> <span class="tw">' + (+sp.truth[0].toFixed(1)) + '</span> · ' +
+          '<span class="td">at ' + sp.xs[sp.xs.length - 1] + ':</span> <span class="tw">' + (+sp.truth[sp.truth.length - 1].toFixed(1)) + '</span>';
+    } else if (mode === "gdraw") state.hintHtml = '<span class="tw">' + esc(GM().greek(q.greek).look) + '</span>';
+    render();
+  }
+  function skip() {
+    if (state.revealed) return;
+    var mode = qm(), q = state.q;
+    state.lastPts = 0;
+    state.streak = 0;
+    if (isSurvival()) state.lives--;
+    state.answers.push({ id: q.mid || q.id, g: "wrong", pts: 0, said: "skipped", mode: mode, typed: null, q: null, skipped: true });
+    state.res = { grade: "wrong", skipped: true };
+    state.note = null;
+    state.revealed = true;
+    render();
+  }
+
   function nextLabel() { return runOver() ? "RESULTS →" : "NEXT →"; }
   function runOver() {
     if (isSurvival()) return state.lives <= 0;
@@ -474,7 +528,7 @@
     '</div>';
 
     var title = isSurvival() ? "SURVIVAL · Q" + state.qn : "QUESTION " + state.qn + " / " + state.prefs.format;
-    var main = panel("QST", title, "", head + body);
+    var main = panel("QST", title, "", head + body + assist());
     if (state.revealed) main += revealPanel();
     return main + tapePanel();
   }
@@ -491,17 +545,18 @@
 
   function revealPanel() {
     var q = state.q, s = strat(q.id), r = state.res, mode = qm();
-    var word = r.grade === "full" ? "CORRECT" : r.grade === "partial" ? "HALF" : "MISS";
-    var cls = r.grade === "full" ? "tg" : r.grade === "partial" ? "ta" : "tr";
+    var word = r.skipped ? "SKIPPED" : r.grade === "full" ? "CORRECT" : r.grade === "partial" ? "HALF" : "MISS";
+    var cls = r.skipped ? "td" : r.grade === "full" ? "tg" : r.grade === "partial" ? "ta" : "tr";
     var lines = [];
+    if (r.hinted) lines.push("Right, with a hint — half points.");
     if (r.twin) lines.push("Also right: a " + strat(r.twin).name.toLowerCase() + " gives exactly this — put-call parity. The book calls it a " + s.name.toLowerCase() + ".");
     if (r.fuzzy) lines.push("(read your answer as “" + s.name + "”)");
     if (r.grade === "wrong" && r.typed && strat(r.typed)) lines.push("You said " + strat(r.typed).name.toLowerCase() + ".");
     if (r.msg && r.grade !== "full") lines.push(r.msg);
-    if (mode === "build" && r.grade === "wrong") {
+    if (mode === "build" && r.grade === "wrong" && !r.skipped) {
       lines.push(r.built ? "You built a " + strat(r.built).name.toLowerCase() + "." : "What you built has no textbook name.");
     }
-    if (mode === "draw") {
+    if (mode === "draw" && !r.skipped) {
       lines.push(r.hits + " of " + r.n + " points within ±" + state.draw.spec.tol.toFixed(1) + ".");
       // P&L = payoff − premium everywhere, so the gap between the true payoff and your line,
       // averaged over the handles, is the net premium your drawing implies.
@@ -705,7 +760,7 @@
       (isSurvival() ? '<span class="opt-lives">' + hearts() + '</span>' : '') +
       '<span class="tw">' + state.points + '</span><span class="td">pts</span></div>';
     var title = isSurvival() ? "SURVIVAL · Q" + state.qn : "QUESTION " + state.qn + " / " + state.prefs.format;
-    var main = panel("QST", title, "", head + body);
+    var main = panel("QST", title, "", head + body + assist());
     if (state.revealed) main += revealGreek();
     return main + tapePanel();
   }
@@ -717,15 +772,16 @@
 
   function revealGreek() {
     var q = state.q, r = state.res, mode = qm(), gr = q.greek ? GM().greek(q.greek) : null;
-    var word = r.grade === "full" ? "CORRECT" : r.grade === "partial" ? "HALF" : "MISS";
-    var cls = r.grade === "full" ? "tg" : r.grade === "partial" ? "ta" : "tr";
+    var word = r.skipped ? "SKIPPED" : r.grade === "full" ? "CORRECT" : r.grade === "partial" ? "HALF" : "MISS";
+    var cls = r.skipped ? "td" : r.grade === "full" ? "tg" : r.grade === "partial" ? "ta" : "tr";
     var lines = [], body;
+    if (r.hinted) lines.push("Right, with a hint — half points.");
     if (r.twin) lines.push("Also right: vega = Γ · S² · σ · T, so for one option gamma and vega draw the same bell (vega's sits a touch to the right).");
     if (r.fuzzy) lines.push("(read your answer as “" + gr.name + "”)");
     if (r.grade === "wrong" && r.typed && GM().greek(r.typed)) lines.push("You said " + GM().greek(r.typed).name.toLowerCase() + ". " + GM().greek(r.typed).look);
-    if (mode === "gdraw") lines.push(r.hits + " of " + r.n + " points within ±" + GG().fmtNum(state.draw.spec.tol) + ".");
-    if (mode === "gtenor") lines.push("You said " + state.input + " (" + Math.round(r.days) + " days).");
-    if (mode === "envelope") lines.push("You said " + GG().fmtNum(r.value) + " — " + Math.round(r.off * 100) + "% off.");
+    if (mode === "gdraw" && !r.skipped) lines.push(r.hits + " of " + r.n + " points within ±" + GG().fmtNum(state.draw.spec.tol) + ".");
+    if (mode === "gtenor" && !r.skipped) lines.push("You said " + state.input + " (" + Math.round(r.days) + " days).");
+    if (mode === "envelope" && !r.skipped) lines.push("You said " + GG().fmtNum(r.value) + " — " + Math.round(r.off * 100) + "% off.");
 
     var head = '<div class="play-fb is-' + (r.grade === "wrong" ? "bad" : "ok") + ' opt-fb">' +
       '<span class="' + cls + '">' + word + '</span>' +
@@ -885,6 +941,7 @@
     state.qn++;
     state.input = ""; state.note = null; state.revealed = false; state.res = null; 
     state.legs = []; state.lastPts = 0;
+    state.hinted = false; state.choices = null; state.hintHtml = null;
     if (state.qmode === "gdraw") {
       var gspec = GG().drawSpec(state.q);
       state.draw = { spec: gspec, ys: gspec.xs.map(function () { return 0; }), sel: 0 };
@@ -917,6 +974,7 @@
     } else {
       r = G().gradeDraw(state.draw.spec, state.draw.ys);
     }
+    if (state.hinted && r.grade === "full") { r.grade = "partial"; r.hinted = true; }
     var pts = G().score(r.grade, state.streak);
     state.points += pts;
     state.lastPts = pts;
@@ -1137,6 +1195,14 @@
       render();
     });
     on("[data-check]", check);
+    on("[data-hint]", hint);
+    on("[data-skip]", skip);
+    on("[data-choice]", function (el) {
+      var c = state.choices && state.choices[+el.getAttribute("data-choice")];
+      if (!c || state.revealed) return;
+      state.input = c.value;
+      check();
+    });
     on("[data-next]", next);
     rootEl.querySelectorAll("[data-mix]").forEach(function (el) {
       el.addEventListener("change", function () {
